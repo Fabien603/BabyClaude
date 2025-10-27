@@ -1,0 +1,65 @@
+# BabyClaude Configuration
+# Based on TinyLlama 1.1B with LoRA fine-tuning
+
+model:
+  name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+  type: "causal_lm"
+  torch_dtype: "bfloat16"  # ou float16 si bfloat16 pas supporté
+  device_map: "auto"
+
+# LoRA Configuration (Parameter-Efficient Fine-Tuning)
+lora:
+  r: 16  # Rank - plus c'est haut, plus de paramètres entraînables
+  lora_alpha: 32
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  lora_dropout: 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+
+# Training Configuration
+training:
+  output_dir: "./checkpoints"
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 4  # Batch effectif = 4*4 = 16
+  learning_rate: 2.0e-4
+  weight_decay: 0.01
+  warmup_steps: 100
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 500
+  save_total_limit: 3
+  fp16: false
+  bf16: true  # Meilleur que fp16 si supporté
+  optim: "paged_adamw_8bit"  # Économe en mémoire
+  gradient_checkpointing: true
+  max_grad_norm: 0.3
+
+# Generation Configuration
+generation:
+  max_new_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+  repetition_penalty: 1.1
+  do_sample: true
+
+# Data Configuration
+data:
+  train_file: "data/train.jsonl"
+  eval_file: "data/eval.jsonl"
+  max_seq_length: 512
+  preprocessing_num_workers: 4
+
+# Capabilities to prioritize (FR/EN bilingual, code, reasoning)
+capabilities:
+  languages: ["fr", "en"]
+  domains: ["code", "reasoning", "instruction_following", "math"]
