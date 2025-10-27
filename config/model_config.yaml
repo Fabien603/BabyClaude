@@ -1,16 +1,17 @@
 # BabyClaude Configuration
-# Based on TinyLlama 1.1B with LoRA fine-tuning
+# Based on Qwen2.5-3B-Instruct with LoRA fine-tuning
 
 model:
-  name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+  name: "Qwen/Qwen2.5-3B-Instruct"
   type: "causal_lm"
   torch_dtype: "bfloat16"  # ou float16 si bfloat16 pas supporté
   device_map: "auto"
 
 # LoRA Configuration (Parameter-Efficient Fine-Tuning)
+# Increased for better factual learning
 lora:
-  r: 16  # Rank - plus c'est haut, plus de paramètres entraînables
-  lora_alpha: 32
+  r: 64  # Increased from 16 - 4x more capacity for learning facts
+  lora_alpha: 128  # Scaled with r
   target_modules:
     - "q_proj"
     - "k_proj"
