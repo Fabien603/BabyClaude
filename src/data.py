@@ -109,8 +109,18 @@ class DatasetLoader:
         """Tokenize examples"""
         # Format if needed
         if 'text' not in examples:
-            formatted = [self.format_chat_template(ex) for ex in examples]
-            texts = [ex['text'] for ex in formatted]
+            # Examples is a dict of lists: {'instruction': [...], 'output': [...], 'input': [...]}
+            num_examples = len(examples['instruction'])
+            texts = []
+
+            for i in range(num_examples):
+                example = {
+                    'instruction': examples['instruction'][i],
+                    'output': examples['output'][i],
+                    'input': examples.get('input', [''] * num_examples)[i]
+                }
+                formatted = self.format_chat_template(example)
+                texts.append(formatted['text'])
         else:
             texts = examples['text']
 
