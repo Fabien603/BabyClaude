@@ -172,7 +172,7 @@ def main():
         optim=train_config['optim'],
         gradient_checkpointing=train_config['gradient_checkpointing'],
         max_grad_norm=train_config['max_grad_norm'],
-        evaluation_strategy="steps",
+        eval_strategy="steps",  # Renamed from evaluation_strategy in newer transformers
         save_strategy="steps",
         load_best_model_at_end=True,
         report_to=["tensorboard"],
