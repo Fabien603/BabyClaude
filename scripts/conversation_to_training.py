@@ -3,9 +3,14 @@ Convert conversation logs to training data
 Extracts our interactions to train JARVIS on your personal context
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import argparse
 import json
-from pathlib import Path
 from datetime import datetime
 
 
