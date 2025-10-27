@@ -2,12 +2,37 @@
 
 Un modèle de langage compact basé sur **TinyLlama 1.1B**, optimisé pour fonctionner sur une RTX 4070 (12GB VRAM). Fine-tuné pour exceller en code, raisonnement, et capacités bilingues français/anglais.
 
+## 🌟 Nouveau : JARVIS Mode
+
+**JARVIS** (Just A Really Very Intelligent System) transforme BabyClaude en assistant personnel **évolutif** :
+
+- 🎯 **Multi-domaines** : Spécialise JARVIS dans N domaines via adapters LoRA
+- 🔄 **Apprentissage continu** : Logs automatiques + réentraînement rapide
+- ⚡ **Quick switch** : Change de domaine en 1 commande
+- 💾 **Ultra léger** : Chaque adapter = ~10-50MB seulement
+- 🔒 **100% local** : Tes données restent chez toi
+
+**Exemples d'usage :**
+```bash
+# Expert Home Assistant
+python jarvis_cli.py --adapter home_assistant_v1
+
+# Ton style de code personnel
+python jarvis_cli.py --adapter personal_code_v2
+
+# Multi-domaines combinés
+python jarvis_cli.py --adapters ha_expert personality
+```
+
+👉 **[Guide complet JARVIS](docs/JARVIS_GUIDE.md)**
+
 ## 🎯 Objectifs
 
 - **Léger**: ~1.1B paramètres, fonctionne sur GPU grand public
 - **Efficient**: Fine-tuning avec LoRA/QLoRA pour économiser la mémoire
 - **Multilingue**: Priorité FR/EN
 - **Spécialisé**: Code, raisonnement logique, mathématiques basiques
+- **Évolutif**: Adapters modulaires pour apprentissage continu
 
 ## 📋 Prérequis
 
@@ -356,6 +381,8 @@ report_to=["tensorboard", "wandb"]
 
 ## 📈 Prochaines étapes
 
+### Mode Simple (Fine-tuning classique)
+
 1. **Test initial**:
    ```bash
    python train.py --use-sample --epochs 1
@@ -373,10 +400,39 @@ report_to=["tensorboard", "wandb"]
    run_quick_eval("checkpoints/final_model")
    ```
 
-4. **Itération**:
-   - Ajuster les hyperparamètres
-   - Combiner plusieurs datasets
-   - Augmenter le nombre d'epochs
+### Mode JARVIS (Recommandé ! 🌟)
+
+1. **Setup JARVIS**:
+   ```bash
+   python jarvis_cli.py  # Test base model
+   ```
+
+2. **Créer ton premier domaine**:
+   ```bash
+   # Option 1: Avec sample data
+   python scripts/quick_domain_trainer.py mon_domaine --create-sample
+
+   # Option 2: Avec tes données
+   python scripts/quick_domain_trainer.py home_assistant \
+       --data-file mes_donnees.jsonl \
+       --epochs 3
+   ```
+
+3. **Utiliser ton adapter**:
+   ```bash
+   python jarvis_cli.py --adapter mon_domaine_v1
+   ```
+
+4. **Amélioration continue**:
+   ```bash
+   # Utilise JARVIS pendant quelques jours
+   # Puis exporte les logs et réentraîne
+   python jarvis_cli.py --export-logs data/logs.jsonl
+   python scripts/quick_domain_trainer.py mon_domaine --data-file data/logs.jsonl
+   # → mon_domaine_v2 créé automatiquement !
+   ```
+
+👉 **[Guide complet JARVIS](docs/JARVIS_GUIDE.md)** pour workflows avancés
 
 ## 🤝 Contributing
 
