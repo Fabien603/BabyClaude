@@ -156,33 +156,45 @@ class BabyClaude:
 
         # Get generation config from YAML or use provided values
         gen_config = self.config['generation']
-        max_new_tokens = max_new_tokens or gen_config['max_new_tokens']
-        temperature = temperature or gen_config['temperature']
+        max_new_tokens = max_new_tokens or gen_config.get('max_new_tokens', 256)
+        temperature = temperature or gen_config.get('temperature', 0.7)
+
+        # Format prompt with ChatML template for TinyLlama-Chat
+        formatted_prompt = f"<|user|>\n{prompt}</s>\n<|assistant|>\n"
 
         # Encode prompt
-        inputs = self.tokenizer(prompt, return_tensors="pt")
+        inputs = self.tokenizer(formatted_prompt, return_tensors="pt")
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
 
-        # Generate
+        # Generate with better parameters to reduce hallucination
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
-                top_p=kwargs.get('top_p', gen_config['top_p']),
-                top_k=kwargs.get('top_k', gen_config['top_k']),
-                repetition_penalty=kwargs.get('repetition_penalty', gen_config['repetition_penalty']),
-                do_sample=kwargs.get('do_sample', gen_config['do_sample']),
+                top_p=kwargs.get('top_p', gen_config.get('top_p', 0.9)),
+                top_k=kwargs.get('top_k', gen_config.get('top_k', 40)),
+                repetition_penalty=kwargs.get('repetition_penalty', gen_config.get('repetition_penalty', 1.15)),
+                do_sample=kwargs.get('do_sample', gen_config.get('do_sample', True)),
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
+                # Stop at </s> or <|user|> tokens
+                bad_words_ids=[[self.tokenizer.encode("<|user|>", add_special_tokens=False)[0]]] if "<|user|>" in self.tokenizer.get_vocab() else None
             )
 
         # Decode
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=False)
 
-        # Remove the prompt from the output
-        if generated_text.startswith(prompt):
-            generated_text = generated_text[len(prompt):].strip()
+        # Extract only the assistant's response
+        if "<|assistant|>" in generated_text:
+            generated_text = generated_text.split("<|assistant|>")[-1]
+
+        # Clean up
+        generated_text = generated_text.replace("</s>", "").strip()
+
+        # Remove the original prompt if it somehow leaked through
+        if formatted_prompt in generated_text:
+            generated_text = generated_text.replace(formatted_prompt, "").strip()
 
         return generated_text
 
