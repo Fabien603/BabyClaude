@@ -1,0 +1,198 @@
+"""
+Model loading and configuration for BabyClaude
+"""
+
+import torch
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig
+)
+from peft import (
+    LoraConfig,
+    get_peft_model,
+    prepare_model_for_kbit_training,
+    PeftModel
+)
+from typing import Optional, Dict, Any
+import yaml
+
+
+class BabyClaude:
+    """Wrapper class for TinyLlama with LoRA fine-tuning capabilities"""
+
+    def __init__(self, config_path: str = "config/model_config.yaml"):
+        """
+        Initialize BabyClaude model
+
+        Args:
+            config_path: Path to YAML configuration file
+        """
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+
+        self.model = None
+        self.tokenizer = None
+        self.peft_config = None
+
+    def load_base_model(self, quantize: bool = True):
+        """
+        Load the base TinyLlama model
+
+        Args:
+            quantize: Whether to use 4-bit quantization (saves VRAM)
+        """
+        model_name = self.config['model']['name']
+
+        print(f"Loading base model: {model_name}")
+
+        # Load tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        # Quantization config for 4-bit training (QLoRA)
+        if quantize:
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16
+            )
+
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                quantization_config=bnb_config,
+                device_map="auto",
+                trust_remote_code=True
+            )
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
+                trust_remote_code=True
+            )
+
+        print(f"Model loaded successfully!")
+        self._print_trainable_parameters()
+
+    def prepare_for_training(self):
+        """Prepare model for LoRA fine-tuning"""
+        if self.model is None:
+            raise ValueError("Load base model first using load_base_model()")
+
+        # Prepare model for k-bit training
+        self.model = prepare_model_for_kbit_training(self.model)
+
+        # Configure LoRA
+        lora_config = self.config['lora']
+        self.peft_config = LoraConfig(
+            r=lora_config['r'],
+            lora_alpha=lora_config['lora_alpha'],
+            target_modules=lora_config['target_modules'],
+            lora_dropout=lora_config['lora_dropout'],
+            bias=lora_config['bias'],
+            task_type=lora_config['task_type']
+        )
+
+        # Apply LoRA
+        self.model = get_peft_model(self.model, self.peft_config)
+
+        print("Model prepared for LoRA training!")
+        self._print_trainable_parameters()
+
+    def load_finetuned(self, adapter_path: str):
+        """
+        Load a fine-tuned LoRA adapter
+
+        Args:
+            adapter_path: Path to the saved LoRA adapter
+        """
+        if self.model is None:
+            self.load_base_model(quantize=True)
+
+        print(f"Loading fine-tuned adapter from: {adapter_path}")
+        self.model = PeftModel.from_pretrained(self.model, adapter_path)
+        print("Fine-tuned model loaded!")
+
+    def _print_trainable_parameters(self):
+        """Print the number of trainable parameters"""
+        trainable_params = 0
+        all_param = 0
+
+        for _, param in self.model.named_parameters():
+            all_param += param.numel()
+            if param.requires_grad:
+                trainable_params += param.numel()
+
+        print(
+            f"Trainable params: {trainable_params:,} || "
+            f"All params: {all_param:,} || "
+            f"Trainable%: {100 * trainable_params / all_param:.2f}%"
+        )
+
+    def generate(
+        self,
+        prompt: str,
+        max_new_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        **kwargs
+    ) -> str:
+        """
+        Generate text from a prompt
+
+        Args:
+            prompt: Input text prompt
+            max_new_tokens: Maximum tokens to generate
+            temperature: Sampling temperature
+            **kwargs: Additional generation parameters
+
+        Returns:
+            Generated text
+        """
+        if self.model is None or self.tokenizer is None:
+            raise ValueError("Model not loaded. Call load_base_model() or load_finetuned() first.")
+
+        # Get generation config from YAML or use provided values
+        gen_config = self.config['generation']
+        max_new_tokens = max_new_tokens or gen_config['max_new_tokens']
+        temperature = temperature or gen_config['temperature']
+
+        # Encode prompt
+        inputs = self.tokenizer(prompt, return_tensors="pt")
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+
+        # Generate
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=kwargs.get('top_p', gen_config['top_p']),
+                top_k=kwargs.get('top_k', gen_config['top_k']),
+                repetition_penalty=kwargs.get('repetition_penalty', gen_config['repetition_penalty']),
+                do_sample=kwargs.get('do_sample', gen_config['do_sample']),
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id,
+            )
+
+        # Decode
+        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        # Remove the prompt from the output
+        if generated_text.startswith(prompt):
+            generated_text = generated_text[len(prompt):].strip()
+
+        return generated_text
+
+    def get_memory_footprint(self) -> Dict[str, Any]:
+        """Get model memory usage"""
+        if self.model is None:
+            return {"error": "Model not loaded"}
+
+        return {
+            "model_size_mb": self.model.get_memory_footprint() / 1024 / 1024,
+            "device": str(self.model.device),
+            "dtype": str(self.model.dtype)
+        }
