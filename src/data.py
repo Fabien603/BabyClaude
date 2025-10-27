@@ -87,21 +87,21 @@ class DatasetLoader:
 
     def format_chat_template(self, example: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Format example using chat template
+        Format example using ChatML template (for TinyLlama-Chat)
         Expected input format: {"instruction": str, "output": str, "input": str (optional)}
         """
         instruction = example.get('instruction', '')
         input_text = example.get('input', '')
         output = example.get('output', '')
 
-        # Build prompt
+        # Build user message
         if input_text:
-            prompt = f"### Instruction:\n{instruction}\n\n### Input:\n{input_text}\n\n### Response:\n"
+            user_message = f"{instruction}\n\nContext: {input_text}"
         else:
-            prompt = f"### Instruction:\n{instruction}\n\n### Response:\n"
+            user_message = instruction
 
-        # Full text for training
-        full_text = prompt + output
+        # Format with ChatML template (same as generation)
+        full_text = f"<|user|>\n{user_message}</s>\n<|assistant|>\n{output}</s>"
 
         return {"text": full_text}
 
