@@ -3,9 +3,14 @@ Quick Domain Trainer
 Rapidly train JARVIS on a new domain of expertise
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import argparse
 import json
-from pathlib import Path
 from src.adapter_manager import AdapterManager
 
 

@@ -3,10 +3,15 @@ Extract code context from repositories
 Creates training data from your personal code style
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import os
 import argparse
 import json
-from pathlib import Path
 from typing import List, Dict
 
 

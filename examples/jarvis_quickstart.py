@@ -3,6 +3,12 @@ JARVIS Quick Start Example
 Shows the basic workflow for creating and using a personal AI assistant
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from src.jarvis import JARVIS
 from src.adapter_manager import AdapterManager
 import json
