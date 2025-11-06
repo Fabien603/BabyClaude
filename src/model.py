@@ -159,12 +159,39 @@ class BabyClaude:
         max_new_tokens = max_new_tokens or gen_config.get('max_new_tokens', 256)
         temperature = temperature or gen_config.get('temperature', 0.7)
 
-        # Format prompt with ChatML template for TinyLlama-Chat
+        # Format prompt with ChatML template for TinyLlama-Chat/Qwen
         formatted_prompt = f"<|user|>\n{prompt}</s>\n<|assistant|>\n"
 
         # Encode prompt
         inputs = self.tokenizer(formatted_prompt, return_tensors="pt")
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+
+        # Create stopping criteria to stop at EOS tokens
+        from transformers import StoppingCriteria, StoppingCriteriaList
+
+        class StopOnTokens(StoppingCriteria):
+            def __init__(self, stop_token_ids):
+                self.stop_token_ids = stop_token_ids
+
+            def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
+                for stop_id in self.stop_token_ids:
+                    if input_ids[0][-1] == stop_id:
+                        return True
+                return False
+
+        # Stop tokens: </s>, <|endoftext|>, <|user|>
+        stop_token_ids = [self.tokenizer.eos_token_id]
+
+        # Add additional stop tokens if they exist
+        for stop_str in ["</s>", "<|endoftext|>", "<|user|>", "<|im_end|>"]:
+            try:
+                stop_id = self.tokenizer.encode(stop_str, add_special_tokens=False)[0]
+                if stop_id not in stop_token_ids:
+                    stop_token_ids.append(stop_id)
+            except:
+                pass
+
+        stopping_criteria = StoppingCriteriaList([StopOnTokens(stop_token_ids)])
 
         # Generate with better parameters to reduce hallucination
         with torch.no_grad():
@@ -178,8 +205,7 @@ class BabyClaude:
                 do_sample=kwargs.get('do_sample', gen_config.get('do_sample', True)),
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
-                # Stop at </s> or <|user|> tokens
-                bad_words_ids=[[self.tokenizer.encode("<|user|>", add_special_tokens=False)[0]]] if "<|user|>" in self.tokenizer.get_vocab() else None
+                stopping_criteria=stopping_criteria,
             )
 
         # Decode
@@ -189,8 +215,11 @@ class BabyClaude:
         if "<|assistant|>" in generated_text:
             generated_text = generated_text.split("<|assistant|>")[-1]
 
-        # Clean up
-        generated_text = generated_text.replace("</s>", "").strip()
+        # Clean up - remove all stop tokens
+        for stop_str in ["</s>", "<|endoftext|>", "<|user|>", "<|im_end|>"]:
+            generated_text = generated_text.replace(stop_str, "")
+
+        generated_text = generated_text.strip()
 
         # Remove the original prompt if it somehow leaked through
         if formatted_prompt in generated_text:
